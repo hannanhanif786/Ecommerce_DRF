@@ -8,6 +8,20 @@ from rest_framework.views import APIView
 from rest_framework import generics
 from django.conf import settings
 from django.core.mail import send_mail
+import threading
+
+class EmailThread(threading.Thread):
+
+    def __init__(self, subject, message, email_from, recipient_list):
+        self.subject = subject
+        self.message = message
+        self.email_from = email_from
+        self.recipient_list = recipient_list
+        threading.Thread.__init__(self)
+
+    # initializing run function its execute when thread starts
+    def run(self):
+        send_mail(self.subject, self.message, self.email_from, self.recipient_list)
 
 
 class CreateOrder(APIView):
@@ -21,7 +35,8 @@ class CreateOrder(APIView):
             message = f'Hi {user}, thank you for ordering in Maemes-southall.'
             email_from = settings.EMAIL_HOST_USER
             recipient_list = [user.email, ]
-            send_mail(subject, message, email_from, recipient_list)
+            # send_mail(subject, message, email_from, recipient_list)
+            EmailThread(subject, message, email_from, recipient_list).start()
             return Response({"msg": "Create"}, status=status.HTTP_201_CREATED)
         return ({"Error": "Not order created"}, serializer.errors)
 
