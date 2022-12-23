@@ -9,9 +9,11 @@ from rest_framework import generics
 from django.conf import settings
 from django.core.mail import send_mail
 import threading
+from .tasks import notify_emails
 
+
+# Creating thread class for email sending
 class EmailThread(threading.Thread):
-
     def __init__(self, subject, message, email_from, recipient_list):
         self.subject = subject
         self.message = message
@@ -21,7 +23,8 @@ class EmailThread(threading.Thread):
 
     # initializing run function its execute when thread starts
     def run(self):
-        send_mail(self.subject, self.message, self.email_from, self.recipient_list)
+        for i in range(10):
+            send_mail(self.subject, self.message, self.email_from, self.recipient_list)
 
 
 class CreateOrder(APIView):
@@ -31,12 +34,16 @@ class CreateOrder(APIView):
         serializer = OrderSerializer(data=data)
         if serializer.is_valid():
             serializer.save(user=self.request.user)
-            subject = 'welcome to Maemes-southall '
-            message = f'Hi {user}, thank you for ordering in Maemes-southall.'
+            subject = "welcome to Maemes-southall "
+            message = f"Hi {user}, thank you for ordering in Maemes-southall."
             email_from = settings.EMAIL_HOST_USER
-            recipient_list = [user.email, ]
-            # send_mail(subject, message, email_from, recipient_list)
-            EmailThread(subject, message, email_from, recipient_list).start()
+            recipient_list = [
+                user.email,
+            ]
+            # for i in range(10):
+            #     send_mail(subject, message, email_from, recipient_list)
+            notify_emails.delay(subject, message, email_from, recipient_list)
+            # EmailThread(subject, message, email_from, recipient_list).start()
             return Response({"msg": "Create"}, status=status.HTTP_201_CREATED)
         return ({"Error": "Not order created"}, serializer.errors)
 
@@ -76,6 +83,7 @@ class GetAddress(APIView):
         user = request.user
         data = Order.objects.filter(user=user)
         user_details = ShippingAddress.objects.filter(
-            order__id__in=data.values_list('id', flat=True))
+            order__id__in=data.values_list("id", flat=True)
+        )
         serilaizer = ShippingAddressSerializer(user_details, many=True)
         return Response(serilaizer.data)
