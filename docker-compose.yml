@@ -4,11 +4,13 @@ services:
   db:
     image: postgres
     volumes:
-      - ./data_db:/var/lib/postgresql/data
+      - data_db:/var/lib/postgresql/data
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+        - "5432:5432"
       
   django:
     build: .
@@ -17,10 +19,52 @@ services:
     command: >
       bash -c "python manage.py makemigrations
       && python manage.py migrate
-      && python manage.py runserver 0.0.0.0:9000"
+      && python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/code
     ports:
-      - "9000:9000"
+      - "8000:8000"
     depends_on:
       - db
+      - redis
+
+  redis:
+    image: redis:6.2-alpine
+    ports:
+      - 6379:6379
+    restart: always
+    volumes:
+      - redisdata:/data
+
+  celery:
+    build: .
+    command: celery -A backend worker -l info
+    depends_on:
+      - redis
+    volumes:
+      - .:/code
+  celery-beat:
+    build: .
+    command: celery -A backend beat -l info
+    depends_on:
+      - redis
+    volumes:
+      - .:/code
+  flower:
+    build: .
+    command: celery -A backend flower
+    depends_on:
+      - django
+      - redis
+      - celery
+    environment:
+      - DEBUG=1
+      - CELERY_BROKER=redis://redis:6379
+      - CELERY_BACKEND=redis://redis:6379
+    ports:
+      - 5555:5555
+
+
+volumes:
+  data_db:
+  redisdata:
